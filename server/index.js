@@ -28,10 +28,20 @@ app.use("/api/config", configRoutes);
 app.use("/api/admin", adminRoutes);
 
 // Serve o frontend (arquivo único) e qualquer estático junto dele.
+// Cache-Control: no-cache força o navegador a sempre revalidar com o
+// servidor antes de usar uma cópia guardada (ETag/Last-Modified) — sem
+// isso, depois de cada correção publicada, quem já tinha aberto o sistema
+// podia continuar rodando a versão antiga (com o bug) até fechar e reabrir
+// a aba manualmente.
 const FRONTEND_DIR = path.join(__dirname, "..", "frontend");
-app.use(express.static(FRONTEND_DIR));
+app.use(
+  express.static(FRONTEND_DIR, {
+    setHeaders: (res) => res.setHeader("Cache-Control", "no-cache"),
+  })
+);
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api")) return res.status(404).json({ erro: "Rota não encontrada." });
+  res.setHeader("Cache-Control", "no-cache");
   res.sendFile(path.join(FRONTEND_DIR, "gestao-projeto-enertex.html"));
 });
 
