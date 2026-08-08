@@ -7382,8 +7382,11 @@ function garantirDialogosCloud() {
 function mostrarTelaLogin() {
   const tela = document.getElementById("telaLoginCloud");
   if (tela) tela.style.display = "flex";
-  const container = document.querySelector(".container");
-  if (container) container.innerHTML = "";
+  // Não limpar o .container aqui: a tela de login já é um overlay em tela
+  // cheia (position:fixed; inset:0) que cobre tudo visualmente. Limpar o
+  // container destruía permanentemente homeView/projectView/etc., e depois
+  // do login o render() tentava usar esses elementos e travava (tela de
+  // "Carregando seus projetos..." pra sempre).
 }
 
 function esconderTelaLogin() {
@@ -7459,8 +7462,31 @@ async function salvarTrocarSenha() {
   }
 }
 
+// Guarda o HTML original do .container (homeView, projectView, etc.) antes
+// de qualquer substituição temporária pela mensagem de "Carregando...". Sem
+// isso, depois de mostrar o placeholder de carregamento não havia como
+// voltar para a estrutura real da página, e o render() (que procura esses
+// elementos por id) travava com erro silencioso, deixando a tela de
+// "Carregando seus projetos..." pra sempre.
+let CONTAINER_HTML_ORIGINAL = null;
+
+function capturarContainerOriginalSeNecessario() {
+  if (CONTAINER_HTML_ORIGINAL === null) {
+    const container = document.querySelector(".container");
+    if (container) CONTAINER_HTML_ORIGINAL = container.innerHTML;
+  }
+}
+
+function restaurarContainerOriginal() {
+  const container = document.querySelector(".container");
+  if (container && CONTAINER_HTML_ORIGINAL !== null) {
+    container.innerHTML = CONTAINER_HTML_ORIGINAL;
+  }
+}
+
 async function iniciarAppCloud() {
   garantirDialogosCloud();
+  capturarContainerOriginalSeNecessario();
 
   const container = document.querySelector(".container");
   if (container) container.innerHTML = '<div class="panel"><p>Carregando seus projetos…</p></div>';
@@ -7479,9 +7505,19 @@ async function iniciarAppCloud() {
     return;
   }
 
+  // Restaura a estrutura real da página (homeView, projectView, etc.) antes
+  // de chamar render(), que depende desses elementos existirem no DOM.
+  restaurarContainerOriginal();
   esconderTelaLogin();
   if (!DADOS.activeId) viewMode = "home";
-  render();
+  try {
+    render();
+  } catch (e) {
+    console.error("Erro ao renderizar após carregar dados:", e);
+    if (container) {
+      container.innerHTML = `<div class="panel"><h2>Ocorreu um erro ao exibir seus dados</h2><p class="desc">${escapeHtml(e.message || String(e))}</p><p class="desc">Recarregue a página. Se o problema continuar, avise o administrador.</p></div>`;
+    }
+  }
 }
 
 iniciarAppCloud();
